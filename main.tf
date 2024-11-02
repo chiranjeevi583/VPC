@@ -1,35 +1,41 @@
 provider "google" {
-  project     = "my-project-279-436907"   # Your GCP project name
-  region      = "us-central1"              # Region remains unchanged
-  credentials = file("terraform.json")      # Points to your service account key
+  project     = "my-project-279-436907"
+  region      = "us-central1"
 }
 
-resource "google_compute_instance" "web_server" {
-  name         = "web-server-instance"      # Instance name
-  machine_type = "f1-micro"                 # Small instance type
-  zone         = "us-central1-a"            # Zone for the instance
-  tags         = ["http-server"]             # Tags for firewall rules
+resource "google_compute_network" "custom-test" {
+  name                    = "test-network"
+  auto_create_subnetworks = false
+}
+resource "google_compute_subnetwork" "network-with-private-secondary-ip-ranges" {
+  name          = "test-subnetwork"
+  ip_cidr_range = "10.2.0.0/16"
+  region        = "us-central1"
+  network       = google_compute_network.custom-test.name
+}
+
+resource "google_compute_instance" "default" {
+  name         = "instance-vpc-automation"
+  machine_type = "e2-medium"
+  zone        = "us-central1-c"
+
 
   boot_disk {
     initialize_params {
-      image = "debian-cloud/debian-11"      # Debian 11 as the OS
+      image = "debian-cloud/debian-11"
+      labels = {
+        my_label = "value"
+      }
     }
   }
 
   network_interface {
-    network = "default"                      # Using the default network
-    access_config {}                         # Enables ephemeral public IP
+    network = google_compute_network.custom-test.name
+    subnetwork = google_compute_subnetwork.network-with-private-secondary-ip-ranges.name
+
+    access_config {
+      // Ephemeral public IP
+    }
   }
-
-  metadata_startup_script = <<-EOT
-    #!/bin/bash
-    apt-get update
-    apt-get install -y apache2                # Installs Apache
-    systemctl start apache2
-    systemctl enable apache2
-  EOT
 }
 
-output "external_ip" {
-  value = google_compute_instance.web_server.network_interface[0].access_config[0].nat_ip  # Outputs the external IP
-}
