@@ -1,46 +1,44 @@
 pipeline {
     agent any
 
-    parameters {
-        choice(name: 'ACTION', choices: ['apply', 'destroy'], description: 'Select the action to perform')
+    environment {
+        GIT_CREDENTIALS = credentials('your-credentials-id') // Replace with your credentials ID
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git 'https://github.com/chiranjeevi583/VPC-TF-Auto.git'
-            }
-        }
-        stage('Setup Credentials') {
-            steps {
-                withCredentials([file(credentialsId: 'TERRAFORM-AUTHE', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    echo "Using Google Cloud service account credentials."
+                script {
+                    // Set the Git tool to use
+                    def gitTool = 'Default' // Change if you have a specific tool configured
+                    // Checkout the repository
+                    checkout([$class: 'GitSCM', 
+                              branches: [[name: '*/main']], // Change branch name if necessary
+                              userRemoteConfigs: [[url: 'https://github.com/chiranjeevi583/VPC-TF-Auto.git', credentialsId: 'your-credentials-id']]])
                 }
             }
         }
+        // Add other stages as needed
         stage('Terraform Init') {
             steps {
-                sh 'echo $PATH' // For debugging
                 sh 'terraform init'
             }
         }
-        stage('Terraform Apply/Destroy') {
+        stage('Terraform Apply') {
             steps {
-                script {
-                    if (params.ACTION == 'apply') {
-                        sh 'terraform apply -auto-approve'
-                    } else {
-                        sh 'terraform destroy -auto-approve'
-                    }
-                }
+                sh 'terraform apply -auto-approve'
             }
         }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: '**/*.tfstate', fingerprint: true
-            cleanWs()
+            archiveArtifacts artifacts: '**/*', fingerprint: true
+        }
+        failure {
+            mail to: 'youremail@example.com', // Replace with your email
+                 subject: "Pipeline '${env.JOB_NAME}' failed",
+                 body: "Something went wrong. Please check the Jenkins console output."
         }
     }
 }
